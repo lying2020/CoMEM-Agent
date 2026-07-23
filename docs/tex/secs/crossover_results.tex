@@ -1,0 +1,43 @@
+To further provide practical intuition for when {\model} becomes advantageous, we conduct a controlled latency and memory benchmark comparing {\model} against the full-context baseline across varying serving concurrency levels (16, 32, and 64). The benchmark uses fixed 512 input tokens and 1024 output tokens over 64 steps, with \texttt{GLM-4.7} as the agent model and $k=3$ for {\model}.
+
+\noindent \textbf{Execution Time.}
+Table~\ref{tab:crossover_time} reports per-step LLM execution time averaged over the trajectory. {\model}'s per-step latency remains nearly constant ($\sim$28--52s depending on concurrency) because its prompt size is bounded at $\sim$5--7K tokens through periodic summarization. In contrast, the full-context baseline's prompt grows linearly with the number of steps, and its latency degrades accordingly.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{0.95pt}
+% \renewcommand{\arraystretch}{1.3}
+\caption{Per-step execution time comparison across concurrency levels. Peak speedup denotes the maximum per-step speedup observed over the trajectory. ``Conc.'' stands for concurrency.}
+\label{tab:crossover_time}
+\begin{tabular}{l c c c c}
+\toprule
+Conc. & {\model} (s) & FC (s) & Traj. Speedup & Peak Speedup \\
+\midrule
+16 & 28.4 & 28.9 & 1.02$\times$ & 1.14$\times$ (step 62) \\
+32 & 42.9 & 55.7 & 1.30$\times$ & 2.03$\times$ (step 56) \\
+64 & 52.3 & 88.8 & 1.70$\times$ & 4.95$\times$ (step 61) \\
+\bottomrule
+\end{tabular}
+\vspace{-3mm}
+\end{table}
+
+\noindent \textbf{Memory Consumption.}
+Table~\ref{tab:crossover_memory} reports KV cache utilization and prompt lengths. {\model}'s GPU KV cache usage remains bounded, while the full-context baseline's KV cache grows monotonically, reaching 96\% at concurrency 64. At high concurrency, KV cache saturation triggers request preemption in the serving engine, causing the non-linear latency explosion observed in Table~\ref{tab:crossover_time}. The crossover point where {\model} becomes faster than the full-context baseline depends on the serving regime: under concurrency 16, the two approaches are comparable as memory bandwidth is not yet saturated; under concurrency 32, {\model} becomes consistently faster once the prompt exceeds $\sim$25K tokens (around step 34); under concurrency 64, the crossover occurs at $\sim$12K tokens (around step 25), beyond which {\model}'s advantage grows rapidly due to compounding KV cache pressure.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{0.50pt}
+% \renewcommand{\arraystretch}{1.3}
+\caption{KV cache utilization and prompt length comparison. FC prompt length is reported at the final step. ``Conc.'' stands for concurrency.}
+\label{tab:crossover_memory}
+\begin{tabular}{l c c c c}
+\toprule
+Conc. & {\model} KV & FC KV & {\model} Prompt & FC Prompt \\
+\midrule
+16 & 1--6\% & up to 34\% & 4.8--6.7K & 30.7K \\
+32 & 15--18\% & up to 94\% & 4.8--6.7K & 46.0K \\
+64 & 26--37\% & up to 96\% & 4.8--6.7K & 33.2K \\
+\bottomrule
+\end{tabular}
+\vspace{-3mm}
+\end{table}

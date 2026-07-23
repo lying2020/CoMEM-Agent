@@ -1,0 +1,121 @@
+Through the preceding analysis, we demonstrate that inference latency is primarily bottlenecked by the decoding stage.
+While most agentic models are large reasoning models with substantial decoding overhead, there exist several lightweight long-context models capable of offloading the burden of long-context processing from the decoding phase.
+In this section, we introduce {\model} (Figure~\ref{fig:framework}), that decouples memory management from the main agent workflow by employing a dedicated smaller memory model that compresses prior interactions into a concise representation for the agent.
+This design reduces latency and memory footprint since fewer parameters are involved, while effectively maintaining a long-context processing capability.
+Specifically, (1) \textbf{memory model} ($f$) is a native long-context model with a lightweight decoding mechanism (we choose a model with smaller parameter count) and is designed to capture sufficient statistics from long-term history while (2) \textbf{agent model} ($\pi$) is a more capable model (usually with larger parameter counts) that proposes policies based on the outputs from $f$ and the short-term memory.
+
+Formally, the memory model $f$ maps the long-term history to a compressed state representation $s_t$:
+\begin{equation}
+    s_t = f({\tau}_{<t};\theta_f)
+\end{equation}
+where $|\theta_f| \ll |\theta_{\pi}|$, ensuring that the computational burden of long-context encoding is handled by a smaller, more efficient model. Moreover, the constraint $|s_t| < |{\tau}_t|$ guarantees that the input length for the agent is significantly reduced, resulting in lower decoding latency compared to standard full-context inference. Then the agent model proposes policy based on the compressed summary.
+\begin{equation}
+    a_t \sim \pi(a|s_t,C_t;\theta_{\pi})
+\end{equation}
+A na\"ive implementation of the workflow described above introduces a \emph{sequential bottleneck}, as the agent model must idle until the memory update concludes. Next, we introduce a novel pipeline to remedy this extra overhead via overlapping the generation of two models.
+
+\noindent \textbf{$k$-step-off Pipeline}
+To mitigate this sequential bottleneck, we propose a novel $k$-step-off asynchronous pipeline (Algorithm~\ref{alg:k_step_pipeline}), illustrated in Figure~\ref{fig:gantt}.
+The core idea is to overlap memory compression with agent execution by allowing the memory model to lag $k$ steps behind.
+The pipeline proceeds in cycles of $k$ steps. At the beginning of each cycle, the memory model is launched asynchronously to compress all history up to the current step. While the memory model runs in the background, the agent continues to execute for the next $k$ steps using the most recently available summary $s$ concatenated with a buffer of raw recent interactions. Upon completion, the new summary becomes available at the start of the next cycle, at which point the agent's KV cache is invalidated and a full uncached prefill is required.
+For the remaining $k-1$ steps in the cycle, the agent reuses its cached prefix and performs only incremental prefilling of new observations which incurs negligible overhead compared to full-context inference.
+% In this design, the memory model operates in the background, continuously compressing history with a fixed lag of $k$ steps ($\tau_{\leq t-k}$). This allows the agent model to proceed without interruption.
+% To compensate for the latency of the memory model, the agent constructs its context by concatenating the available and slightly stale summary $s$ with the recent raw interaction buffer $\tau_{t-k+1}$.
+Formally, the policy generation at step $t$ is defined as:
+\begin{equation}
+a_t \sim \pi(a_t \mid \underbrace{f(\tau_{\leq t-k})}_{\text{Latent Summary}}, \underbrace{\tau_{t-k+1:t}}_{\text{Recent Buffer}}; \theta_{\pi})
+\end{equation}
+This design ensures that while the heavy lifting of long-context compression happens asynchronously, the agent always has access to the full context via both summary and the explicit short-term buffer.
+Larger $k$ amortizes the uncached prefilling cost over more steps (as shown in Figure~\ref{fig:gantt}, comparing 1-step-off with 2-step-off), at the expense of increased staleness in the summary.
+We will formalize the latency--staleness trade-off in the next section.
+
+% \begin{algorithm}[t]
+% \caption{$k$-step-off Inference Pipeline}
+% \label{alg:k_step_pipeline}
+% \begin{algorithmic}[1]
+% \REQUIRE Agent Model $\pi$, Memory Model $f$, Initial History $\tau_0$, Update Interval $k$
+% \STATE \textbf{Initialize:} $s \leftarrow f(\tau_0)$ \COMMENT{Initial memory state}
+% \STATE $t \leftarrow 0$
+% \STATE Start background process $\mathcal{P}_{mem}$ to compute next state
+
+% \WHILE{not finished}
+%     \STATE \COMMENT{\textbf{Agent Thread (Main)}}
+%     \STATE Observe current context $C_t$
+%     \STATE Sample action $a_t \sim \pi(a \mid s, C_t)$
+%     \STATE Execute $a_t$ and update history $\tau_{t+1} \leftarrow \tau_t \cup \{a_t, x_{t+1}\}$
+    
+%     \STATE \COMMENT{\textbf{Synchronization Check}}
+%     \IF{$(t \mod k) == 0$}
+%         \STATE Wait for $\mathcal{P}_{mem}$ to finish
+%         \STATE $s \leftarrow s_{new}$ \COMMENT{Update state with result from background}
+%         \STATE Start new background process $\mathcal{P}_{mem}$:
+%         \STATE \quad $s_{new} \leftarrow f(\tau_{\leq t}; \theta_f)$ \COMMENT{Compute future state asynchronously}
+%     \ENDIF
+    
+%     \STATE $t \leftarrow t + 1$
+% \ENDWHILE
+% \end{algorithmic}
+% \end{algorithm}
+
+% \begin{algorithm}[t]
+% \caption{$k$-step-off Pipeline}
+% \label{alg:k_step_pipeline}
+% \begin{algorithmic}[1]
+% \REQUIRE Agent Model $\pi$, Memory Model $f$, Initial History $\tau_0$, Retain Turns $k$
+% \STATE \textbf{Initialize:} $s \leftarrow \emptyset$, $t \leftarrow 0$, $\mathcal{P}_{mem} \leftarrow \text{None}$
+
+% \WHILE{not finished}
+%     \STATE \COMMENT{\textbf{Retrieve Summary from Previous Step}}
+%     \IF{$\mathcal{P}_{mem} \neq \text{None}$}
+%         \STATE $s \leftarrow \text{await } \mathcal{P}_{mem}$ \COMMENT{Summary of $\tau_{\leq t-1-k}$}
+%     \ENDIF
+    
+%     \STATE \COMMENT{\textbf{Start Async Memory Compression (Background)}}
+%     \STATE $\mathcal{P}_{mem} \leftarrow \texttt{async } f(\tau_{\leq t-k})$ \COMMENT{Will be used at step $t+1$}
+    
+%     \STATE \COMMENT{\textbf{Agent Inference (Parallel with $\mathcal{P}_{mem}$)}}
+%     \STATE Construct context $C_t \leftarrow (s, \tau_{[t-k+1:t]})$ \COMMENT{Summary + recent $k$ turns}
+%     \STATE Sample action $a_t \sim \pi(a \mid C_t)$
+    
+%     \STATE \COMMENT{\textbf{Environment Execution}}
+%     \STATE Execute $a_t$, observe $o_{t+1}$
+%     \STATE $\tau_{t+1} \leftarrow \tau_t \cup \{a_t, o_{t+1}\}$
+%     \STATE $t \leftarrow t + 1$
+% \ENDWHILE
+% \end{algorithmic}
+% \end{algorithm}
+\begin{algorithm}[t]
+\caption{$k$-step-off Pipeline}
+\label{alg:k_step_pipeline}
+\small
+\begin{algorithmic}[1]
+\REQUIRE Agent Model $\pi$, Memory Model $f$, Retain Turns $k$
+\STATE \textbf{Initialize:} $s \leftarrow \emptyset$, $t \leftarrow 1$, $\mathcal{P}_{mem} \leftarrow \text{None}$
+
+\WHILE{not finished}
+    \STATE \COMMENT{\textbf{Synchronization (every $k$ steps)}}
+    \IF{$\mathcal{P}_{mem}$ is complete}
+        \STATE $s \leftarrow \text{result}(\mathcal{P}_{mem})$; \; invalidate KV cache
+        \STATE $\mathcal{P}_{mem} \leftarrow \text{None}$
+    \ENDIF
+    
+    \STATE \COMMENT{\textbf{Agent Inference}}
+    \IF{KV cache valid}
+        \STATE Prefill new tokens only: $P^\pi(o_t)$ \COMMENT{Cached}
+    \ELSE
+        \STATE Prefill full context: $P^\pi(s, \tau_{[t-k+1:t]})$ \COMMENT{Uncached}
+    \ENDIF
+    \STATE Decode $a_t \sim \pi(a \mid s,\; \tau_{[t-k+1:t]})$
+    
+    \STATE \COMMENT{\textbf{Environment Execution}}
+    \STATE Execute $a_t$, observe $o_{t+1}$
+    \STATE $\tau_{t+1} \leftarrow \tau_t \cup \{a_t, o_{t+1}\}$
+    
+    \STATE \COMMENT{\textbf{Launch Memory (async, every $k$ steps)}}
+    \IF{$t \bmod k = 0$}
+        \STATE $\mathcal{P}_{mem} \leftarrow \texttt{async}\; f(\tau_{\leq t})$
+    \ENDIF
+    \STATE $t \leftarrow t + 1$
+\ENDWHILE
+\end{algorithmic}
+\end{algorithm}
