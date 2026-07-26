@@ -1,8 +1,0 @@
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=0.96\linewidth]{figs/latency_with_speedups.pdf}
-    \caption{Latency and Speedup results for \texttt{GLM-4.7} over various batch sizes. \model's speedup scales up with throughput.}
-    \label{fig:batch_size}
-    \vspace{-3mm}
-\end{figure}
-We evaluate the inference latency of \model against a Full-context baseline across batch sizes ranging from $32$ to $256$. While the baseline performs competitively at the smallest scale, it exhibits poor scaling as batch size increases, with latency rising from $1206.60$ ms to $9684.24$ ms. In contrast, \model demonstrates superior computational efficiency and linear scaling; it achieves a $2.08\times$ speedup at a batch size of 128 and a $2.52\times$ speedup at $256$, effectively mitigating the memory-bandwidth bottlenecks typical of large-batch long-context processing.

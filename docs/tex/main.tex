@@ -1,0 +1,958 @@
+
+\documentclass{article} % For LaTeX2e
+\usepackage{iclr2026_conference,times}
+
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{fontawesome5}
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 
+\usepackage{tikz}
+% 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+\definecolor{deepblue}{RGB}{0, 51, 153}
+\usepackage{graphicx}
+\usepackage{threeparttable}
+% For \rowcolor command
+\usepackage{colortbl}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{wrapfig}
+\usepackage{xspace}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{pifont}
+\usepackage[most]{tcolorbox}
+\usepackage{xcolor}
+\newcommand{\paratitle}[1]{\vspace{1.5ex}\noindent\textbf{#1}}
+\newcommand{\ie}{\emph{i.e.,}\xspace}
+\newcommand{\aka}{\emph{a.k.a.,}\xspace}
+\newcommand{\eg}{\emph{e.g.,}\xspace}
+\newcommand{\etal}{\emph{et al.}\xspace}
+\newcommand{\ignore}[1]{}
+
+
+\title{Auto-scaling Continuous Memory \\ for GUI Agent}
+
+% Authors must not appear in the submitted version. They should be hidden
+% as long as the \iclrfinalcopy macro remains commented out below.
+% Non-anonymous submissions will be rejected without review.
+
+% \author{Antiquus S.~Hippocampus, Natalia Cerebro \& Amelie P. Amygdale \thanks{ Use footnote for providing further information
+% about author (webpage, alternative address)---\emph{not} for acknowledging
+% funding agencies.  Funding acknowledgements go at the end of the paper.} \\
+% Department of Computer Science\\
+% Cranberry-Lemon University\\
+% Pittsburgh, PA 15213, USA \\
+% \texttt{\{hippo,brain,jen\}@cs.cranberry-lemon.edu} \\
+% \And
+% Ji Q. Ren \& Yevgeny LeNet \\
+% Department of Computational Neuroscience \\
+% University of the Witwatersrand \\
+% Joburg, South Africa \\
+% \texttt{\{robot,net\}@wits.ac.za} \\
+% \AND
+% Coauthor \\
+% Affiliation \\
+% Address \\
+% \texttt{email}
+% }
+\author{%
+  Wenyi Wu$^{1}$,~
+  Kun Zhou$^{1}$\thanks{Corresponding Author},~
+  Ruoxin Yuan$^{2}$\thanks{This work was conducted during the author's internship at UCSD.},~
+  Vivian Yu$^{1}$,~\\[0.2em]
+  \textbf{Stephen Wang$^{3}$,~
+  Zhiting Hu$^{1}$,~
+  Biwei Huang$^{1}$}
+  \\[0.2em]
+  $^{1}$University of California, San Diego
+  $^{2}$Fudan University
+  $^{3}$Abel AI
+  \\[0.2em]
+\texttt{kuzhou@ucsd.edu}
+}
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to \LaTeX{} to determine where to break
+% the lines. Using \AND forces a linebreak at that point. So, if \LaTeX{}
+% puts 3 of 4 authors names on the first line, and the last on the second
+% line, try using \AND instead of \And before the third author name.
+
+
+\usepackage{amssymb}
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+
+\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+\begin{document}
+\newtcolorbox{fancybox}[1]{ % #1 = title
+  enhanced,
+  breakable,
+  colframe=black,         % Border color
+  colback=white,          % Main background
+  coltitle=black,         % Title text color
+  colbacktitle=gray!30,   % Title background
+  fonttitle=\bfseries,    % Title font
+  title=#1,               % Accept the title as input
+  boxed title style={
+    colframe=black,
+    colback=gray!30,
+    sharp corners,
+    size=small,
+    interior style={top color=gray!30, bottom color=gray!30}
+  },
+  top=2mm, bottom=2mm, left=4mm, right=4mm,
+  boxrule=0.8pt,
+  arc=4mm,
+}
+
+\maketitle
+
+
+
+\begin{abstract}
+%Training large language models as interactive agents for controlling graphical user interfaces presents a unique challenge to optimize long-horizon action sequences with multimodal feedback from complex environments. 
+%Memory is a primary bottleneck, and discrete, text-only memories are ill-suited: they inflate inference cost and can distract planning. 
+%We propose a continuous-memory architecture that augments an agent with the external knowledge memory, a bank of compressed trajectory embeddings for cross-task and cross-model transfer. 
+%This continuous, compact memory encodes multimodal experience into a handful of dense vectors that are cheaper to retrieve, portable across backbones, and better aligned with action generation.
+%Empirically, we observe a scaling law for memory: enlarging the memory bank and increasing retrieved examples consistently improves success. To realize this at scale, we introduce memory self-evolvement, an autonomous loop that discovers new environments, synthesizes tasks, rolls out trajectories, and quality-checks outcomes, % to %thereby expanding the memory bank without human intervention and steadily improving generalization under layout shifts and long horizons. 
+%Experiments show that our memory-augmented agents outperform strong base models, specialized fine-tuned agents, and discrete-memory baselines, demonstrating that continuous, model-portable memory is practical and scalable for robust GUI agents.
+
+We study how to endow GUI agents with scalable memory that help generalize across unfamiliar interfaces and long-horizon tasks. Prior GUI agents compress past trajectories into text tokens, which balloons context length and misses decisive visual cues (\eg exact widget size and position). We propose a continuous memory that encodes each GUI trajectory into a fixed-length sequence of continuous embeddings using the VLM itself as an encoder; these embeddings are plugged directly into the backbone’s input layer, sharply reducing context cost while preserving fine-grained visual information. As memory size and retrieval depth increase, performance improves monotonically, unlike text memories that degrade with long prompts. To grow memory at low cost, we introduce an auto-scaling data flywheel that (i) discovers new environments via search, (ii) synthesizes tasks with an open-source VLM, (iii) rolls out trajectories with the agent, and (iv) verifies success with the same VLM. Using this pipeline, we collect 100k+ trajectories for about \$4000 and fine-tune only the memory encoder (LoRA on a Q-Former, 1.2\% parameters) with 1,500 samples. On real-world GUI benchmarks, our memory-augmented agent consistently improves success rates under long horizons and distribution shifts. Notably, Qwen-2.5-VL-7B + continuous memory achieves performance comparable to state-of-the-art closed-source models (\eg GPT-4o, Claude-4).
+\end{abstract}
+
+\vspace{-1.5em}
+{\centering
+\begin{tabular}{ccc}
+{\color{black}\faGithub}~\textbf{\href{https://github.com/WenyiWU0111/CoMEM-Agent}{Code}} &
+{\color{deepblue}\faGlobe}~\textbf{\href{https://wenyiwu0111.github.io/CoMEM-Agent-project-page/}{Website}} &
+\includegraphics[height=1.4em]{iclr_starter/figs/hf-logo.png}~\textbf{\href{https://huggingface.co/datasets/WenyiWU0111/CoMEM-agent-memory-trajectories}{Dataset}}
+\end{tabular}
+\par}
+\vspace{0.5em}
+
+\section{Introduction}
+
+
+Recent advances in visual grounding and training techniques for vision–language models (VLMs) \citep{mckinzie2024mm1methodsanalysis, wu2025} have catalyzed rapid progress in Graphical User Interface (GUI) agents \citep{zhu2025oagentsempiricalstudybuilding, tongyidr}. With appropriately designed frameworks and action spaces, these agents can operate across websites, desktop software, and mobile apps to solve multi-step planning tasks such as web search and online shopping. However, real-world tasks are often more unpredictable and long-horizon. They demand robust generalization to unfamiliar visual layouts, iconography, and unseen functionalities that require new knowledge. Existing GUI agents generally perform not well under such distribution shifts~\citep{androidcontrol, guiodyssey}, incurring repeated retries or execution failures on complex plans. By contrast, humans exhibit strong robustness across diverse GUIs. Through drawing on accumulated episodic experiences and encountered interface states from human memory, we can easily learn to use new webs and apps, and accomplish novel tasks~\citep{Tulving2002}. Moreover, human memory is continually refreshed. We ingest information from varied sources to retain potentially useful cues for future scenarios~\citep{Oreilly2014}.
+
+
+As a promising path toward better generalization, recent work equips GUI agents with memories built from collected GUI trajectories~\citep{fang2025memp, zhang2025universalretrievalmultimodaltrajectory}. Each trajectory is a sequence of screenshots and executed actions. Without compression, a single trajectory can span thousands, sometimes hundreds of thousands of tokens, inflating inference cost and introducing irrelevant detail. To control cost, prior systems typically compress trajectories into text-only discrete tokens. However, text-based representations cannot faithfully capture crucial visual cues in GUI environments (\eg the precise size and position of clickable elements), which are often decisive for reliable execution.
+
+To overcome these limitations, we encode GUI trajectories into compact, transferable \textbf{continuous embeddings}. Concretely, following the paradigm that uses the VLM itself as the encoder~\citep{wu2025}, we build a continuous memory collection in which each trajectory is compressed into a fixed-length sequence of 8 embeddings. These condensed memories sharply reduce context length while can preserve fine-grained visual cues. At inference, retrieved memory embeddings are injected directly into the VLM’s embedding layer to plug in new knowledge. This model-friendly integration alleviates the context-length bottleneck and supports scaling both the total memory size and the number of in-context retrieved items. As shown in Figure~\ref{fig:scaling_laws}, performance with continuous memory improves monotonically as we scale memory size and retrieval depth, exhibiting a clear scaling trend, whereas text-based memories degrade beyond roughly ten retrieved items due to ballooning sequence length, increased attention overhead, and accumulated semantic noise during inference.
+
+%who remember error conditions, previously encountered states, and reusable routines across apps (\eg login and purchase), current agents rarely carry a persistent, well-designed memory to support such knowledge.
+%require accurate decision making at each step of the long-term planning process.
+% operating on GUI screenshots like humans, these agents can solve planning and reasoning tasks across 
+%GUI agents still struggle with real-world complex tasks that require long-horizon workflows, diverse applications generalization, and potential distribution shifts in visual layout and iconography. A key limitation is memory: unlike humans, who remember error conditions, previously encountered states, and reusable routines across apps (\eg login and purchase), current agents rarely carry a persistent, well-designed memory to support such knowledge.
+%GUI environments are partially observable and non-stationary, where a single screenshot omits latent state, while layouts, icons, and menus drift across versions and vendors. 
+%Without memory that captures and reuses past observations and successful subroutines, agents repeatedly re-solve the same subproblems, accumulate errors over long horizons, and generalize poorly under layout shifts. Therefore, memory has emerged as the principal bottleneck for robust GUI agency.
+% Humans hinge on recalling past observations and successful routines in their memory to clearly understand the current state, reduce the perplexity and help make accurate decisions.
+% However, existing GUI agents have not been widely equipped with the well-design memory for supporting the above knowledge, causing them repeatedly solving the same subproblems and failing to generalize beyond the common GUI scenarios.
+
+%As a promising solution for the generalization problem, recent work has also attempted to equip GUI agents with a memory consisting of collected GUI trajectories~\citep{}.
+%A GUI trajectory typically consists of a sequence of screenshot images and operated actions.
+%Without compression, one trajectory might require thousands of, even hundred thousands of tokens in the input, which greatly increases the inference cost and also might involve irrelevant details.
+%Therefore, prior work typically relies on text-based discrete tokens to extract the key information.
+%However, such text-based representations can not fully capture the accurate visual details well in GUI environments, \eg size and position of the click button, although such visual details might be very important.
+
+%mechanisms, such as prompt-based histories or retrieval-augmented generation (RAG) \citep{RAG2020, realm2020}. While effective for language-centric tasks, this text-only memory is ill-suited to GUI control: (i) prompt length grows with interaction history, inflating latency and inference cost; (ii) long, noisy logs entangle planning with irrelevant details and exacerbate context-window contention; (iii) text representations discard fine-grained visual signals that are essential for grounding actions on screenshots.
+% For GUI agent, not good, grow with context length, increase inference cost, and entangle planning with verbose, often noisy logs. 
+
+%To address the limitation, we aim to encode GUI trajectories into compact and transferable continuous embeddings.
+%Concretely, we borrow the idea of using the VLM itself as the encoder~\citep{wu2025}, to build a continuous memory bank consisting of compressed embeddings of the collected trajectories, \ie xxx embeddings per trajectory.
+%The highly condensed memories can greatly reduce the context length and also preserve the visual information, and the memory items can be directly inserted into the embedding layer of VLMs to plug-in the new knowledge.
+%Such highly-condensed embeddings and model-friendly equipment designs, enable to unleash the agent model from the context length constraint, and support scaling up the memory size and the in-context retrieved item number.
+%As shown in Figure~\ref{fig:scaling_laws}, continuous memory shows constant improvements with the scaling of memory size and the retrieved item number, reflecting a scaling law in this setting.
+%While text-based memories start degrading after retrieving ten items, due to the greatly increased length and potential noise from the retrieved items.
+
+%which can better support the scaling of the memory size and retrieved item 
+%unleashing the agent to benefit from the scaling of the memory
+%decoding cost, preserve visual signals necessary for grounding, improve robustness under distribution shifts, and enable cross-task/model transfer without retraining the backbone.
+
+% \begin{figure}[ht]
+%     \centering
+%     \begin{subfigure}[b]{0.45\textwidth}
+%         \centering
+% \includegraphics[width=\textwidth]{iclr_starter/figs/scaling_law_logx_memory_accuracy_with_regression.pdf}
+%         \caption{Scaling law of Memory Bank Size}
+%         % \label{fig:memory_scaling}
+%     \end{subfigure}
+%     \hfill  % This creates horizontal spacing between subfigures
+%     \begin{subfigure}[b]{0.48\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{iclr2026/iclr_starter/figs/scaling_law_sample_number.pdf}
+%         \caption{Scaling law of Memory Samples}
+%         % \label{fig:sample_scaling}
+%     \end{subfigure}
+%     \caption{Scaling laws for memory-based approaches: (a) Impact of memory bank size on accuracy, and (b) Effect of the number of experience memory samples on accuracy.}
+%     \label{fig:scaling_laws}
+% \end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{iclr_starter/figs/combined_three_figures.pdf}
+\caption{Experimental results to verify the effectiveness of our continuous memory in GUI agent setting. (a) Performance scaling law with the memory size; (b) Performance scaling law with retrieved sample number; (c) CoMEM outperforms closed-source state-of-the-art models across benchmarks.}
+    \label{fig:scaling_laws}
+\end{figure}
+
+
+%Following this tendency, it is promising to collect more GUI agent trajectories to further scale up the continuous memory.
+%However, existing high-quality trajectories are mostly based on human annotation, which is costly and hard to scale up.
+%To solve it, in this paper, we propose an auto-scaling approach that can automatically collect GUI trajectories to expand our memory, and guarantee the diversity and quality.
+%Concretely, we build a loop consisting of new environment search, new task creation, trajectory rollout, and quality checking.
+%Owing to the strong capabilities of VLMs, we observe that the quality of the automatically collected data can be guaranteed.
+
+To capitalize on this scaling law, we seek to scale continuous memory by collecting far more GUI trajectories. Yet high-quality traces are typically human-annotated, which are costly and hard to scale up. We therefore propose an \textbf{auto-scaling data flywheel} that autonomously discovers new environments, creates tasks, rolls out trajectories, and checks quality. 
+Concretely, we first crawl candidate websites or apps through the search engine, and then leverage an open-source VLM to synthesize the task queries for the new environment. Next, we utilize the agent model to perform plan-and-action to solve the synthetic task on the environment, and continue to use the VLM to check if the task goal is achieved.
+In practice, we found that open-source VLMs' planning and verification capabilities are sufficient to maintain diversity and quality at scale.
+Thus, the whole data flywheel only needs a search engine, a well-performed open-source VLM, and an agent model, which enables continual and low-cost auto-scaling of a highly informative continuous memory for GUI agents.
+
+
+% 
+
+% \begin{wrapfigure}[18]{r}{0.5\textwidth}
+% \vspace{-15pt}
+%     \centering
+%     \includegraphics[width=0.5\textwidth]{iiclr_starter/figs/model_comparison_performance.pdf}
+%     \caption{Comparison of benchmark accuracy among Qwen-2.5-VL-7B+CoMEM and state-of-the-art closed-source models.}
+%     \label{fig:model_cost_comparison}
+% \end{wrapfigure}
+
+Based on the data flywheel, we spend about \$4k to collect more than 100k GUI trajectories for building the continuous memory, and utilize a very efficient fine-tuning paradigm that only optimizes the LoRA \citep{hu2021lora} and Q-Former\citep{qformer} layer in the memory encoder using totally 1,500 training samples and 1.2\% parameters.
+Extensive experiments demonstrate that our approach leads to consistent improvements on real-world GUI benchmarks and also guarantees a relatively lower inference cost, including long-horizon and distribution shifts scenarios.
+As shown in Figure~\ref{fig:scaling_laws}, Qwen-2.5-VL-7B \citep{yang2024qwen2.5} equipped with our memory method can achieve comparable performance with state-of-the-art closed-source models (\eg GPT-4o \citep{openai2024gpt4o} and Claude-4\citep{anthropic2024claude4}), and even significantly outperform them on the Webvoyager dataset.
+
+
+
+
+In summary, the contributions of this paper are as follows:
+\begin{itemize}
+\item We introduce a continuous memory for GUI agents that encodes trajectories as compact, plug-and-play embeddings for frozen VLM backbones, yielding monotonic gains as memory size and retrieved items scale.
+\item We build an auto-scaling data flywheel that discovers environments, synthesizes tasks, rolls out trajectories, and performs quality control to expand a diverse and high-quality memory without human annotation.
+\item Extensive experiments on diverse GUI planning tasks show that memory-augmented agents perform better than state-of-the-art models.
+\end{itemize}
+
+    %\item  We propose a continuous memory designed for GUI agents that encodes prior experience as compact embeddings and integrates plug-and-play with frozen VLM backbones. We further verify its promising improvement with the scaling of memory size and retrieved samples.
+    %\item We develop an auto-scaling framework that automatically discovers new environments, synthesizes tasks, rolls out trajectories, and performs quality control. This loop expands a diverse, high-quality memory bank without human annotation, enabling the continuous memory to grow in coverage and robustness over time.
+    %\item  We conduct comprehensive experiments across diverse GUI-based planning tasks, demonstrating that memory-augmented planning improves generalization, especially under layout shifts and visual variation, and yields consistent gains over strong non-memory baselines.
+
+
+\section{Related Work}
+%We review the related work from the following three perspectives:
+\paragraph{GUI Agents.}
+A wave of benchmarks has standardized evaluation for GUI agents: Mind2Web \citep{mind2web} targets generalist web control across many real sites; WebArena \citep{zhou2023webarena} and VisualWebArena \citep{visualwebarena} add realistic, execution-based evaluation for text-only and multimodal agents; OSWorld \citep{osworld} scales to real operating systems and open-ended desktop workflows and underscores agents’ current limitations in grounding and operational knowledge; and GUIOdyssey \citep{guiodyssey} aims for cross-app mobile GUI navigation.
+Across benchmarks, modern GUI agents improve via better grounding \citep{screenspotpro,osatlas}, larger and more diverse training \citep{uitars}, and RL-style finetuning \citep{luo2025guir1, lu2025uir1}.
+Specifically, WebGPT \citep{WebGPT} fine-tunes an LLM to browse and cite sources in a text-only environment; WebShop agents \citep{WebShop} that interleave reasoning with text actions and have been applied to web tasks. 
+Beyond DOM-centric pipelines, a parallel line focuses on \emph{screenshot-based} agents. SeeAct \citep{zheng2024seeact_multimodal_mind2web} frames GPT-4V as a generalist web agent operating from screenshots, with a tool interface and online evaluation on live websites. WebSight \citep{bhathal2025websight} likewise adopts a vision-first pipeline that eliminates DOM reliance, pairing a fine-tuned VLM with modular planning/verification and episodic memory. UI-TARS \citep{uitars} reports strong end-to-end agent performance via large-scale GUI pretraining and iterative data collection. Our setting follows this screenshot-only, tool-calling paradigm and extends it with continuous memory to enable compact, transferable knowledge reuse.
+
+\paragraph{Memory for LLMs and Agents.} 
+LLM/VLM agents remain constrained by finite context windows and weak long-term retention, motivating external and learned memory mechanisms. Early retrieval-based approaches such as RAG \citep{RAG2020} and REALM \citep{realm2020} equips models with non-parametric textual memory, but long concatenated contexts raise inference cost and can distract planning \citep{RAGsurvey2024}. 
+Recent works move beyond token concatenation toward \emph{structured} and \emph{continuous} memories. 
+VoCo-LLaMA \citep{VoCo-LLaMA} and MA-LMM \citep{he2024malmm} compress visual content into compact embeddings. CoMEM \citep{wu2025} advances this line for VLMs by learning continuous memory that is portable across models and avoids the pitfalls of token concatenation. 
+% In parallel, storage and access strategies are evolving: persistent systems such as LongMem \citep{longmem2023} keep compressed knowledge in key–value caches, while retrieval driven methods (Wiki-LLaVA \citep{Wiki-LLaVA}, RoRA-VLM \citep{RoRA-VLM}, EchoSight \citep{EchoSight}) treat external knowledge bases as memory banks for related tasks.
+In the agent literature, Agent Workflow Memory \citep{wang2025AWM} induces reusable workflows from experience and selectively retrieves them to guide future decisions, improving long-horizon tasks both offline and online. Memp \citep{fang2025memp} targets procedural memory, distilling past trajectories into step-level instructions and higher-level scripts with explicit build–retrieve–update mechanisms for lifelong use. \citep{zhang2025universalretrievalmultimodaltrajectory} proposes trajectory-level retrieval over unified, multimodal agent traces, positioning trajectory banks as first-class memory for agent policy reuse and analysis. Together, these directions suggest that dense, model-agnostic memories can provide stable, low-overhead knowledge that transfers across tasks and backbones.
+% Memorizing Transformers \citep{wu2022memorizing} attach vector memories that support non-parametric recall without gradient updates.
+% More recent work shifts toward continuous memory: knowledge is represented as dense embeddings rather than raw text.
+
+% Compared with CoM’s symbolic/linguistic memories, our approach uses model-agnostic continuous memory embeddings, which is smaller to store, cheaper to retrieve, and reusable across VLM/LLM backbones.
+%  Our work leverages this idea in a full agent loop for perception–planning–acting.
+
+\paragraph{LLM for Data Annotation.}
+A growing body of work replaces costly human supervision with LLM-driven synthesis and grading. 
+Self-Instruct \citep{wang-etal-2023-self-instruct} and its evolutionary variants \citep{zeng-etal-2024-automatic, xu2024wizardlm} bootstrap large, scalable instruction datasets directly from pretrained LLMs’ own generations.
+In GUI domains, ZeroGUI \citep{ZeroGUI} automates online learning by having a VLM generate tasks from the current screen, roll out policies, and verify success, thereby expanding training data at near-zero human cost. SEAgent \citep{SEAgent} is an agentic self-evolving framework enabling computer use agents to autonomously evolve through interactions with unfamiliar software, therefore empowers mastering novel software environments via experiential learning. 
+Together, these works provide a practical recipe for continual data growth to fuel agent learning and, in our case, to expand the memory at scale.
+
+
+\section{Preliminary}
+\label{sec:prelim}
+
+\paragraph{Problem Statement.}
+Following the \emph{vision-based} setting in SeeAct \citep{zheng2024seeact_multimodal_mind2web} and WebSight \citep{bhathal2025websight}, we consider a GUI interaction environment that exposes a page rendering engine and a set of action interfaces.
+Given the environment and the natural language task instruction (\eg ``\textit{Find the address for the nearest Armageddon Shop}''), the agent perceives the world solely through pixels and selects the next action from the following set:
+\begin{equation}
+\mathcal{A}=\{\textsc{CLICK},\; \textsc{TYPE},\; \textsc{SCROLL},\; \textsc{WAIT},\; \textsc{STOP}\}.    
+\end{equation}
+At time $t$, the agent receives an observation
+$o_t = \langle I_t \rangle$ from the current state, where $I_t$ is a screenshot of the GUI environment.% and $c_t$ is an optional caption or brief textual summary (\eg system or user instruction). 
+Then, the agent outputs a structured action call $a_t \in \mathcal{A}$ to operate the GUI. 
+%A task instance $\mathcal{T}$ is .
+% \paragraph{Action space (tools).}
+%The toolset follows common web-agent abstractions: 
+%Here $u$ denotes a target UI element or pixel coordinate. For grounding, the agent may address UI elements via (i) coordinates, or (ii) element labels produced by an auxiliary grounding module.
+% \paragraph{Dynamics and trajectories.}
+The environment transition executes $a_t$ on the interface and returns the next screenshot $I_{t+1}$, yielding a trajectory $\tau=(o_t,a_t)_{t=1}^T$. We assume a horizon cap $T_{\max}$. Following existing work~\citep{he2024webvoyager}, a task is \emph{successful} if the last $s$ page states satisfy the goal according to \emph{LLM-as-Judge evaluation}. We report standard success rate on public web-agent benchmarks.
+
+\paragraph{Our Target.}
+In this paper, we aim to equip the GUI agent with a continuous memory that consists of compressed embeddings of useful trajectories from different environments and tasks.
+For each task, we first retrieve the top-$k$ relevant items from the memory, and then concatenate their continuous embeddings into the context.
+At each step, the agent model produces the next action conditioned on both the current observation and memory items, and the memory-augmented policy is:
+\begin{equation}
+a_t \sim \pi_\theta\!\left(a \mid o_t,\, m_t\right),    
+\end{equation}
+where $m_t$ is the concatenated continuous vectors of the retrieved memory items. %In the following paper, we write $\mathcal{M}_{\text{ext}} = \{(k_i, v_i)\}_{i=1}^{N}$ for an external memory bank with keys $k_i\in\mathbb{R}^{d}$ and values $v_i\in\mathbb{R}^{d_v}$, and $\mathcal{M}_{\text{hist}}$ for the short-term history cache encoding the recent window of the current trajectory.
+
+
+\section{Approach}
+According to the promising improvement and scaling law shown in Figure~\ref{fig:scaling_laws}, we aim to equip the GUI agent with a scalable continuous memory containing useful GUI trajectories.
+We first introduce our devised data flywheel for automatically scaling the memory, and then present the integration of our continuous memory and the agent model. We show the overview of our approach in Figure~\ref{fig:placeholder}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{iclr_starter/figs/agent_comem_combined.drawio.png}
+\caption{Overview of our memory-augmented VLM agent framework.
+We devise (1) a four-phase memory auto-scaling data flywheel; (2) a memory storing diverse environments and successful trajectories; and (3) a VLM-based memory encoder that converts retrieved trajectories from the memory into compact embeddings to guide the VLM during inference.}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsection{Memory Auto-scaling Data Flywheel}
+\label{sec:memory flywheel}
+%As discussed in the introduction, we observe a memory scaling law: enlarging the memory bank and increasing the number of retrieved examples consistently improves success rates (see Figure~\ref{fig:scaling_laws}). 
+Large-scale, diverse, high-quality GUI trajectories are key for our continuous memory to strengthen GUI agents’ capabilities.
+To enable scaling, we introduce an autonomous data flywheel that grows the memory without any human intervention.
+For a start, let $\mathcal{Q}$ be the {task/query pool}, $\mathcal{E}$ the {environment pool} (web/apps), and $\mathcal{T}$ the {trajectory pool}. We initialize $\mathcal{Q}_0$ using the queries from a seed dataset, \ie Mind2Web training set~\citep{mind2web, zheng2024seeact_multimodal_mind2web}, and set $\mathcal{E}_0$ and $\mathcal{T}_0$ as empty set $\varnothing$.
+%which includes natural language queries about 2,000 tasks.
+At each iteration, we update $(\mathcal{Q}_t,\mathcal{E}_t,\mathcal{T}_t)\to(\mathcal{Q}_{t+1},\mathcal{E}_{t+1},\mathcal{T}_{t+1})$ through four phases that continuously discover new environments, synthesize tasks, roll out trajectories, and conduct quality evaluation.
+
+%thereby steadily enhancing generalization across layout variations and different enrivonments.
+
+\paragraph{Phase-1: New Environment Discovery.}
+Inspired by humans who often seek new apps and webs through online search, we utilize an online search engine to discover diverse new environments. 
+We first sample a few queries from $\mathcal{Q}_t$, and use SerpAPI\footnote{https://serpapi.com/} to search for the top 20 related websites. 
+Then, we simply test the stability and accessibility of the websites, and filter out the low-quality ones.
+Next, we deduplicate the websites with $\mathcal{E}_t$, and obtain the newly discovered environment set $\mathcal{E}^{*}$.
+
+
+%From each query, we collect the top-20 relevant websites, resulting in a corpus of 6,676 unique websites spanning 13 domains. Full details of this process are provided in Appendix~\ref{appendix}.
+
+\paragraph{Phase-2: New Task Creation.}
+For each new environment $e\in {\mathcal{E}}^{*}$, we use a VLM to automatically synthesize new task queries for it. Given the environment screenshot, the VLM first produces a detailed text description of the site. Using this description, along with the screenshot, the VLM then generates a set of candidate task queries $\mathcal{Q}^{*}_e$ that are potentially solvable within the environment. 
+%We further employ the VLM to filter out infeasible tasks and refine the remaining ones for quality and solvability. This pipeline results in a total of 206,068 high-quality tasks.
+
+
+\paragraph{Phase-3: Trajectory Rollout.}
+Next, we employ an agent model (\ie Qwen2.5-VL-32B \citep{yang2024qwen2.5}) to perform autonomous rollouts. 
+Given each query $q \in {\mathcal{Q}}^{*}_e$, we follow the setup described in Section~\ref{sec:prelim} to make the agent model interact with environment $e$.
+We collect all the actions and observations to compose the trajectory $\tau^{*}_{q}=(o_t,a_t)_{t=1}^T$.
+
+
+\paragraph{Phase-4: Quality Checking.}
+Upon completion of each task, we evaluate the resulting trajectory using a dedicated judging model. The evaluation process involves feeding the task query $q$ and the full trajectory $\tau^{*}_{q}$ into the judge VLM, which determines whether the task was successfully completed. 
+For high-quality evaluation, we use SEAgent-1.0-7B~\citep{SEAgent}, a fine-tuned model specifically trained for GUI agent assessment.
+Finally, we collect all the positive trajectories, and their task queries and environments, to update the trajectory pool $\mathcal{T}_t$, task pool $\mathcal{Q}_t$, and environment pool $\mathcal{E}_t$.
+
+% \newcommand{\cmark}{\ding{51}}  % ✓
+% \newcommand{\xmark}{\ding{55}}  % ✗
+% \begin{table}[h]
+% \caption{Comparison of dataset construction methods, with Env. and Anno. refer to Environment and Annotation correspondingly. Our method supports full trajectories, is automatically expandable, and yields significantly larger data at low cost.}
+% \centering
+% \small
+% \renewcommand{\arraystretch}{1.2}
+% \resizebox{\columnwidth}{!}{
+% \begin{tabular}{l c c c c c}
+% \toprule
+% \textbf{Dataset} & \textbf{Env. Size} & \textbf{Sample Size} & \textbf{Step-wise Anno.} & \textbf{Human Anno.} \\
+% \midrule
+% WebArena & 4     & 812    & \cmark & \cmark \\
+% VisualWebArena & 3     & 910    & \cmark  & \cmark \\
+% WebShop  & 1     & 12k products   & \xmark & \cmark \\
+% OmniACT  & 30 & 9,802 & \xmark       & \cmark \\
+% OSWorld & 10    & 369    & \xmark & \cmark \\
+% ScreenAgent  & 39     & 723      & \xmark  & \cmark      \\
+% Mind2Web & 137   & 2,350   & \cmark & \cmark \\
+% Webvoyager & 15    & 643    & \xmark & \xmark \\
+% \midrule
+% \midrule
+% \textbf{Ours} & 6,676 & 15,145 & \cmark & \xmark \\
+% \bottomrule
+% \end{tabular}
+% }
+% \label{tab:dataset-comparison}
+% \end{table}
+
+\newcommand{\cmark}{\ding{51}}  % ✓
+\newcommand{\xmark}{\ding{55}}  % ✗
+\begin{wraptable}{r}{0.68\textwidth}
+\vspace{-1.2em}
+\caption{Comparison across different GUI data resource. \# Env. and \# Samples denote the number of collected environments and samples in the datasets, respectively. Step-wise and Fully Auto Anno. denote whether we use fine-grained step-wise annotation and fully automatic annotation strategy, respectively.}
+\vspace{-0.3em}
+\centering
+\small
+%\resizebox{\linewidth}{!}{  % Resize to fit inside the wraptable width
+\begin{tabular}{l c c c c}
+\toprule
+\multirow{2}{*}{\textbf{Dataset}} & \multirow{2}{*}{\textbf{\# Env.}} & \multirow{2}{*}{\textbf{\# Samples}} & \textbf{Step-wise} & \textbf{Fully Auto} \\
+                 &                    &                      & \textbf{Anno.}      & \textbf{Anno.} \\
+\midrule
+WebArena         & 4     & 812            & \cmark & \xmark \\
+VisualWebArena   & 3     & 910            & \cmark & \xmark \\
+WebShop          & 1     & 12,087   & \xmark & \xmark \\
+OmniACT          & 30    & 9,802          & \xmark & \xmark \\
+OSWorld          & 10    & 369            & \xmark & \xmark \\
+ScreenAgent      & 39    & 723            & \xmark & \xmark \\
+Mind2Web         & 137   & 2,350          & \cmark & \xmark \\
+Webvoyager       & 15    & 643            & \xmark & \cmark \\
+\midrule
+\textbf{Ours}    & \textbf{10k+} & \textbf{100k+}         & \cmark & \cmark \\
+\bottomrule
+\end{tabular}
+%}
+\label{tab:dataset-comparison}
+\vspace{-1em}
+\end{wraptable}
+
+\paragraph{Outcome.}
+This \emph{discover} $\rightarrow$ \emph{generate} $\rightarrow$ \emph{rollout} $\rightarrow$ \emph{verify} closed loop provides a simple but flexible auto-scaling strategy to continuously expand $\mathcal{Q}$, $\mathcal{E}$, and $\mathcal{T}$. 
+In practice, by setting simple diversity and quality filters, we can further prevent redundancy and ensure robustness.
+%as $|\mathcal{M}|$ scales, retrieval-augmented planning improves with minimal context overhead. 
+In experiments, we spend about \$4k to collect more than 100k trajectories spanning from 10k environments.
+As shown in Table~\ref{tab:dataset-comparison}, our trajectory dataset is a more diverse large-scale dataset than existing open-source ones. Our data flywheel supports full step-wise and automatic annotations, enabling low-cost scale-up with minimal manual effort. More details can be found in Appendix \ref{sec:task generation pipeline}.
+
+\subsection{Integrating Continuous Memory to GUI Agent}
+\label{sec:memory design}
+%Based on the collected memory data from our devised data flywheel, we utilize it to compose the continuous memory and integrate it into GUI agent, to facilitate effective knowledge transfer across different tasks and environments.
+We first introduce the design of the memory encoder, then the fine-tuning strategy and the retrieval mechanism.
+Leveraging the trajectories collected by our data flywheel, we integrate a continuous memory into the GUI agent to enable effective knowledge transfer across tasks and environments. We first describe the memory encoder, then the retrieval mechanism, and finally the fine-tuning strategy.
+%We propose a memory-augmented vision-language architecture for GUI agents that integrates \emph{continuous memory} 
+
+%In our memory encoder, we follow CoMEM~\citep{wu2025} that employs a Q-Former \citep{qformer} to compress each multimodal trajectory from retrieved experience into a compact set of continuous memory embeddings. 
+%These embeddings are injected into the agent model via a plug-and-play mechanism that prepends them to the model’s input embeddings.
+%Such a way allows the agent model to attend to contextual memory without modifying its original architecture or retraining.
+%Owing to the strong representation capability of continuous embeddings, we can compress long multimodal trajectories that often exceed 15,000 tokens\footnote{Each trajectory generally consists of 10 action-screenshot pairs, where each action-screenshot pair typically requires about 1,500 tokens in existing VLMs \citep{zheng2024seeact_multimodal_mind2web}.} into just 8 vectors, making it feasible to incorporate extensive external knowledge and task history within the model’s limited context window. 
+
+\paragraph{Continuous Memory Encoder.}
+Following CoMEM~\citep{wu2025}, we employ a Q-Former~\citep{qformer} to compress each retrieved multimodal trajectory into a small set of continuous memory embeddings. These embeddings are injected into the agent in a plug-and-play manner by prepending them to the model’s input embeddings, allowing the agent to attend to contextual memory without architectural changes or full retraining. Thanks to the high representational capacity of continuous embeddings, long trajectories that often exceed 15,000 tokens\footnote{Each trajectory typically contains about 10 action–screenshot pairs; each pair costs 1,500 tokens in common VLMs~\citep{zheng2024seeact_multimodal_mind2web}.} can be compressed to as few as 8 vectors, making large external knowledge and history feasible within limited context budgets.
+
+\paragraph{Memory Retrieval.}
+At inference time, given the current observation $o_t$, we perform embedding-based multimodal retrieval to fetch the most relevant prior experiences. Concretely, a CLIP encoder~\citep{radford2021learning} maps screenshots and associated actions/queries from each stored trajectory to a set of embeddings, which are then pooled into a single multimodal key. We index all keys with FAISS~\citep{douze2024faiss} and retrieve the top-$k$ nearest neighbors. The corresponding trajectories are converted by the memory encoder into continuous embeddings and prepended to the agent’s input, providing exemplar-driven guidance without inflating the token prompt.
+
+%During inference, given the current observation $o_t$, we leverage embedding-based multimodal semantic matching for retrieving the most relevant items.
+%Concretely, we utilize a CLIP encoder~\citep{radford2021learning} to convert the screenshots with associated action/query within a trajectory into multiple embeddings, and then perform pooling to condense them into a multimodal embedding.
+%Next, we use the efficient FAISS index~\citep{douze2024faiss} to retrieve the top-$k$ nearest embeddings, and return their corresponding trajectories.
+%All the trajectories will be converted into continuous embeddings via the memory encoder, and fed into the agent model for supporting its action prediction.
+
+
+\paragraph{Efficient Fine-tuning for Memory Encoder.}
+To adapt the memory encoder to the agent with minimal cost, we fine-tune it using LoRA~\citep{hu2021lora} (rank 16) shared across all Q-Former \citep{qformer} layers, updating only 1.2\% of parameters. For data efficiency, we train on 1,500 high-quality trajectories drawn from open-source and synthetic sources. Each step in a trajectory forms a training instance augmented with its top-3 retrieved memories. This parameter- and data-efficient setup completes in 20 hours on a single NVIDIA H100 while yielding strong generalization.
+%Following CoMEM~\citep{wu2025}, we adopt a lightweight approach to fine-tune our memory encoder for adapting its produced continuous embeddings into the agent model. 
+%For parameter efficiency, we apply Low-Rank Adaptation (LoRA) \citep{hu2021lora} with a rank of 16, sharing parameters across all Q-Former layers. As a result, only 1.2\% of total parameters are updated during fine-tuning.
+%For data efficiency, we only select 1,500 high-quality trajectories from both open-source and the synthetic dataset for training.
+%We split each step within the trajectory, and retrieve its top-$3$ relevant items from the memory to compose a memory-augmented training sample.
+%This parameter- and data-efficient setup enables the entire training process to complete within 20 hours on a single NVIDIA H100 GPU, while still achieving strong generalization performance.
+
+
+
+
+%The core actor model operates in a multimodal observation setting, taking as input a screenshot of the current webpage along with relevant experience trajectories from similar past tasks. The External Knowledge Memory is a set of retrieved experience trajectories, each represented as a sequence of interaction steps consisting of a screenshot, an associated caption, and an executed action.
+
+
+%By conditioning on both the real-time observation and retrieved memory, the model is able to leverage prior knowledge and behavioral patterns to reason more effectively, resulting in more informed and contextually appropriate decisions during  interactions.
+
+%\paragraph{Continuous Memory Architecture.}
+% \textbf{What is stored.} 
+%\textbf{Memory Motivation} Diverse and multimodal experience memory plays a critical role in enhancing an agent's reasoning and decision-making capabilities~\citep{wang2025AWM, zheng2023synapse}. However, due to the limited context length of large language models, it is infeasible to include rich and varied experience trajectories directly within the prompt. Inspired by CoMEM~\citep{wu2025}, we instead encode retrieved external knowledge into dense vector representations, which are fed into a frozen VLM without increasing token-level context length or introducing additional inference overhead.
+
+%\textbf{Memory Bank Constitution} The external knowledge memory $\mathcal{M}_{\text{ext}}$ stores compressed representations of successful interaction trajectories collected from previous tasks. Each trajectory consists of a sequence of screenshot, caption, and action tuples, and is compressed into $m$ \emph{memory cells} using a dedicated compressor module. This module includes a lightly fine-tuned VLM and a Q-Former~\citep{qformer}, which together encode the multimodal trajectory into a dense embedding.
+
+% \textbf{How we read.}
+
+
+% \textbf{How we write.}
+%\textbf{Memory Update.} After completing a task, validated successful trajectories are appended to $\mathcal{M}_{\text{ext}}$. Each multimodal trajectory is compressed into a small number of memory embeddings (e.g., $m = 8$), allowing rich and informative experiences to be stored efficiently with minimal token overhead.
+
+
+
+
+\section{Experiments}
+\subsection{Experimental Setup}
+\label{sec:env setup}
+\paragraph{ReAct-style and Tool-calling Mechanism.} 
+Our main actor model adopts a vision-language architecture aligned with the tool-calling and ReAct paradigms. To execute actions, the model outputs structured reasoning followed by a tool invocation from a predefined toolset consisting of both GUI tools (e.g., CLICK, TYPE, SCROLL PAGE, WAIT, STOP) and Analysis tools (e.g., Page Content Analyzer, Change Page). For location grounding—such as selecting a pixel for clicking or typing, we augment the screenshot using a SOM-based labeling method, assigning clear identifiers to each UI element. The model must describe the target item and specify its label. If it fails to produce a valid label, we fall back to UI-TARS-1.5-7B \citep{uitars} as a backup grounding module to ensure robust interaction. This hybrid approach enables both accurate decision-making and reliable UI manipulation in complex web environments.
+
+\paragraph{Evaluation Settings.}
+% We evaluate our approach using a memory base constructed from self-generated experience trajectories, as described in Section \ref{sec:memory_data_collection}, which serves as external knowledge memory base for retrieval. 
+
+Experiments are conducted on three challenging multimodal web-agent benchmarks, MMInA \citep{zhang2024mmina}, Multimodal-Mind2Web \citep{mind2web, zheng2024seeact_multimodal_mind2web} and Webvoyager \citep{he2024webvoyager}, covering diverse real-world web-using scenarios.
+% MMInA is a multihop benchmark operating on real-world, evolving websites, designed to evaluate agents' ability to perform compositional tasks that require long-horizon planning and precise grounding in multimodal environments. Multimodal-Mind2Web spans 137 real-world websites across 31 domains, offering over 2,000 open-ended tasks, making it a strong benchmark for developing generalist agents capable of cross-domain generalization and long-horizon reasoning. 
+
+\begin{itemize}
+    \item[(i)] \textbf{MMInA}~\citep{zhang2024mmina} is designed to evaluate GUI agents on real-world websites. It contains 1,050 tasks across domains such as shopping and travel, requiring agents to perform  multimodal grounding and long-horizon planning. We use the Wikipedia and Shopping domains and test on all available samples within these two categories.
+
+\item[(i)] \textbf{Multimodal-Mind2Web}~\citep{mind2web, zheng2024seeact_multimodal_mind2web} is a large-scale benchmark containing over 2,000 open-ended tasks from 137 real-world websites spanning 31 domains. For our evaluation, we select the first 100 tasks from the test-domain and test-website subsets, which include domains and websites not seen during training, thereby evaluating the out-of-distribution (OOD) generalizability of the agent. We skip tasks where the associated website is no longer accessible at evaluation time.
+
+\item[(i)] \textbf{WebVoyager}~\citep{he2024webvoyager} contains real-world tasks from 15 websites and challenges agents to ground and reason in highly dynamic and multimodal web environments. We follow WebSight \citep{bhathal2025websight}, to use a subset of achievable tasks for evaluation.
+\end{itemize}
+
+
+We adopt the LLM-as-Judge paradigm \citep{he2024webvoyager} to evaluate task completion. For MMInA, we provide the language model with both the model’s final answer and the ground truth answer, and ask it to determine whether the response is correct. For Multimodal-Mind2Web and WebVoyager, we supply the task description along with a sequence of trajectory screenshots to a VLM, which judges whether the task has been successfully completed. We report Task Accuracy as the evaluation metric.
+
+\paragraph{Baseline Methods.}
+To assess the effectiveness of our proposed memory-augmented framework, we compare the performance of the actor model across the following four settings:
+
+\begin{itemize}
+    \item[(i)] \textbf{Closed Source Base Model:} including GPT-4o \citep{openai2024gpt4ocard}, Gemini-Pro-Vision \citep{team2023gemini}, and Claude-4\citep{anthropic2024claude4}.
+    
+    \item[(ii)] \textbf{Open Source Base Model:} including GLM 4.1V-9B~\citep{GLM}, Qwen2.5-VL-7B~\citep{wang2024qwen2}, and Qwen2.5-VL-32B~\citep{yang2024qwen2.5}. These two settings serve as baselines without task-specific adaptation or external memory.
+    
+    \item[(iii)] \textbf{Specialized Fine-Tuned Model:} including UI-TARS-1.5~\citep{uitars}, CogAgent~\citep{hong2023cogagent}, and WebSight~\citep{bhathal2025websight}, which are fine-tuned specifically for GUI tasks. This setting provides a comparison with task-specific adaptation.
+    
+    \item[(iv)] \textbf{Open Source Model + Memory:} where we augment the base model with external memories in two different forms. \textit{Text-based Memory} includes only unimodal (text) external experience trajectories in the form of tokenized textual prompts, serving as a baseline to assess the impact of text-based memory. \textit{CoMEM} compresses and stores multimodal (text and screenshots) external experience trajectories in a continuous embedding space, evaluating the benefits of rich, multimodal memory representations for complex agent tasks.
+\end{itemize}
+
+All results reported in Table~\ref{tab:memory-model-comparison} are based on our own reproduction. The environment setup, task sampling, and evaluation protocols are consistent to ensure fair comparison across models.
+
+\subsection{Main Results}
+
+\begin{table}[h]
+\centering
+\caption{Performance comparison of GUI Agents on MMInA, Mind2Web, and WebVoyager evaluation of task accuracy. Bold indicates the best performance, and underline denotes the second-best. Results from closed-source base models are for reference only and excluded from ranking.}
+\vspace{-0.5em}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccccc}
+\toprule
+& \multicolumn{2}{c}{\textbf{MMInA}} & \multicolumn{4}{c}{\textbf{Mind2Web}} & \textbf{WebVoyager} & \multirow{2}{*}{\textbf{Avg.}}\\
+\cmidrule(lr){2-3} \cmidrule(lr){4-7} \cmidrule(lr){8-8}
+\textbf{Model} & \textbf{Wiki} & \textbf{Shop} & \textbf{Shop} & \textbf{Travel} & \textbf{Info} & \textbf{Service} & \textbf{Overall} &  \\
+\midrule
+\textbf{Closed Source} & & & & & & & & \\
+GPT-4o & 51.3\% & 37.0\% & 15.4\% & 14.3\% & 22.6\% & 29.4\% & 31.8\% & 27.8\% \\
+Gemini-Pro-Vision & 52.3\% & 41.6\% & 12.5\% & 25.0\% & 20.8\% & 22.8\% & 47.7\% & 30.4\% \\
+Claude-4 & 50.0\% & 40.0\% & 10.5\% & 22.2\% & 19.8\% & 26.7\% & 40.9\% & 28.8\% \\
+\midrule
+\midrule
+\textbf{Open Source} & & & & & & & & \\
+Qwen2-VL-7B  & 7.8\% & 0.0\% & 0.0\% & 2.2\% & 8.3\% & 14.0\% & 31.8\% & 8.8\% \\
+Qwen2.5-VL-7B & 36.7\% & 15.5\% & 2.6\% & 9.5\% & 9.6\% & 17.3\% & 40.0\% & 14.4\% \\
+GLM 4.1V-9B & 34.7\% & 20.3\% & 13.3\% & 11.1\% & 13.6\% & \textbf{33.3\%} & 40.0\% & 23.0\% \\
+Qwen2.5-VL-32B & \underline{43.3\%} & \underline{37.6\%} & 8.0\% & 12.2\% & 7.6\% & 13.0\% & 40.9\% & 21.6\% \\
+\midrule
+\textbf{Specialized Finetuned} & & & & & & & & \\
+UI-TARS-1.5 & 36.4\% & 1.0\% & 0.0\% & 14.3\% & 5.6\% & 6.5\% & 34.8\% & 13.2\% \\
+CogAgent & 20.5\% & 7.0\% & 10.7\% & \textbf{20.0\%} & 12.4\% & \underline{20.6\%} & - & 15.3\% \\
+Websight & 12.0\% & 9.5\% & 8.3\% & 6.7\% & 13.3\% & 17.6\% & 47.7\% & 15.8\% \\
+\midrule
+\multicolumn{2}{l}{\textbf{Memory-augmented}} & & & & & & & \\
+UI-TARS-1.5-7B & & & & & & & & \\
+~ + Text-based Memory  & 16.0\% & 1.0\% & 0.0\% & 11.0\% & 3.6\% & 8.6\% & 34.0\% & 10.0\% \\
+\rowcolor{cyan!8}
+~ + CoMEM  & 41.3\% & 17.9\% & \underline{14.3\%} & 18.2\% & \underline{23.3\%} & 18.9\% & 38.0\% & \underline{23.8\%} \\
+Qwen2.5-VL-7B  & & & & & & & & \\
+~ + Text-based Memory  & 34.2\% & 31.4\% & 7.1\% & 17.8\% & 12.7\% & 16.6\% & \underline{44.0\%} & 22.2\% \\
+\rowcolor{cyan!8}
+~ + CoMEM & \textbf{47.4\%} & \textbf{45.0\%} & \textbf{22.2\%} & \underline{18.8\%} & \textbf{26.5\%} & 17.7\% & \textbf{54.5\%} & \textbf{31.7\%} \\
+\bottomrule
+\end{tabular}%
+}
+\label{tab:memory-model-comparison}
+\end{table}
+
+\paragraph{Result Analysis.}
+As shown in Table \ref{tab:memory-model-comparison}, general base models perform poorly on web GUI tasks, with Qwen2.5-VL-7B achieving only 26.11\%  task accuracy in MMInA and 9.78\% in Mind2Web. These models lack grounding in interactive environments and struggle with the structured reasoning required for web interfaces. Specialized finetune models such as CogAgent and WebSight perform better in some domains (e.g., CogAgent achieves 15.94\% in Mind2Web tasks), but remain inconsistent and lack robustness across tasks, suggesting limited generalization beyond their training data.
+
+Augmenting the base model with external memories significantly improves performance, as it provides additional context, past experience, and task-relevant knowledge. For example, adding external Text-based Memory raises the performance of Qwen2.5-VL-7B to 32.78\% in MMInA, 44.0\% in Webvoyager. Our proposed CoMEM further boosts performance by augmenting rich multimodal trajectories into compact embeddings. With CoMEM, Qwen2.5-VL-7B achieves 46.20\% in MMInA, 21.28\% in Mind2Web and 54.5\% in Webvoyager, which is the best performance across all settings. This demonstrates that continuous memory effectively encodes long, multimodal  experience into very few tokens, enabling efficient and scalable memory integration.
+
+We also observe that UI-TARS-1.5-7B performs poorly across benchmarks, primarily due to its lack of exposure to interactive web navigation tasks during training. However, when augmented with CoMEM, UI-TARS-1.5 achieves a substantial performance improvement—from just 6.6\% to 23.8\% overall—demonstrating that our memory system effectively compensates for planning limitations by providing structured, multimodal task experiences that guide decision-making.
+
+\paragraph{Scaling Law.}
+% As shown in Figure~\ref{fig:scaling_laws}, performance with continuous memory improves monotonically as we scale memory size and retrieval depth, exhibiting a clear scaling trend, whereas text-based memories degrade beyond roughly ten retrieved items due to ballooning sequence length and accumulated noise.
+To characterize the scaling behavior of our continuous memory, we refer to the empirical tendency, and leverage a rather simple log-linear function to model the relationship between model accuracy and the memory size $M$:
+\begin{equation}
+\mathrm{Acc}(m)\;=\;a+b\,\log m
+\end{equation}
+and estimate $\langle a,b \rangle$ by ordinary least squares separately for each fixed number of memories samples $m\in\{3,10,50,100\}$.
+As seen Figure~\ref{fig:scaling_laws}(a), the log-linear function can well describe the relationship and indicates the constantly increasing gains with respect to the scaling of the memory size.
+Besides, when comparing the curves with different retrieved samples, it is obvious that more samples lead to steeper improvement when increasing the memory size.
+%when the agent retrieves more memory samples.
+%The $x$-axis is $\log m$ and the $y$-axis is the accuracy on MMInA Shopping tasks.
+%The fitted slopes increase with $m$ increase, indicating 
+%This yields an empirical scaling trend: increase in bank size raises accuracy, with larger $m$ producing steeper improvements.
+
+
+For the effect of the number of retrieved memory samples $K$, we we fit a cubic polynomial in $\log k$ to accuracy on MMInA Shopping tasks via ordinary least squares. As shown in Figure~\ref{fig:scaling_laws}(b), CoMEM exhibits a sustained upward trend, whereas text-based memories peak and then deteriorate beyond roughly ten retrieved items, likely due to ballooning sequence length and accumulated noise.
+
+
+\subsection{Further Analysis}
+
+\paragraph{Out-of-domain GUI Environment.}
+% For GUI-Odyssey, we report Action Matching Score (AMS), using Qwen-VL as the base model. For OSWorld, we report Success Rate (SR), using UI-TARS as the base model.
+\begin{table}[h]
+\centering
+\caption{Out-of-domain-GUI Environment Evaluation. AMS and SR denote Action Matching Score and Success Rate respectively. We evaluate Qwen-VL on GUI-Oddsey and UI-TARS on OSWorld.}
+\vspace{-0.5em}
+\small
+%\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{2}{c}{\textbf{GUl-Oddsey} (AMS) } & \multicolumn{4}{c}{\textbf{OSWorld} (SR)} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-7}
+\textbf{Model} & \textbf{High Level} & \textbf{Low Level} & \textbf{Office} & \textbf{Daily} & \textbf{Professional} & \textbf{Overall} \\
+\midrule
+Baseline & 22.38\% & \textbf{45.58\%} & 24.70\% & 25.60\% & 60.20\% & 26.40\% \\
+~ + Text-based Memory & 24.42\% & 37.35\% & 23.10\% & 23.10\% & 57.10\% & 24.70\%\\
+~ + CoMEM & \textbf{27.41\%} & 44.90\% & \textbf{25.13\%} &	\textbf{28.21\%} &	\textbf{60.87\%} & \textbf{26.73\%} \\
+\bottomrule
+\end{tabular}
+%}
+\label{tab:OOD-GUI}
+\end{table}
+
+To evaluate the generalization capability of our continuous memory mechanism, we conduct experiments in out-of-domain (OOD) GUI environments. Specifically, we utilize the memory constructed in web-based environments and a memory encoder fine-tuned on the web data. Evaluation is performed on two GUI benchmarks: GUI-Odyssey~\citep{guiodyssey} and OSWorld~\citep{osworld}. OSWorld focuses on real-world desktop operating systems and open-ended workflows, while GUI-Odyssey targets cross-application navigation on mobile GUIs.
+
+Following the original evaluation protocols, we report the Action Matching Score (AMS) for GUI-Odyssey and the Task Success Rate (SR) for OSWorld. The results reveal two key findings: (1) the Text-based Memory exhibits a negative impact on performance in OOD settings. Since it relies on copying explicit actions or formats from prompts, it often introduces noise when applied to unfamiliar environments. (2) In contrast, the continuous memory demonstrates strong generalization. It encodes abstract, high-level knowledge and actionable rules into compact embeddings, which transfer effectively across different GUI domains—including unseen operating systems and applications.
+
+
+\paragraph{Inference Latency Study.}
+
+% \begin{wraptable}[12]{r}{0.5\textwidth}
+% \vspace{-1em}
+% \centering
+% \caption{Inference speed and performance comparison across different methods. We report the average inference time (in minutes) per trajectory in two domains.}
+% \vspace{-0.5em}
+% \small
+% %\resizebox{0.48\textwidth}{!}{%
+% \begin{tabular}{lcc}
+% \toprule
+%  & \multicolumn{2}{c}{\textbf{Time (min / trajectory)}} \\
+% \cmidrule(lr){2-3}
+% \textbf{Method} & \textbf{Wikipedia} & \textbf{Shopping} \\
+% \midrule
+% Qwen2.5-VL & 2.33 & 1.57 \\
+% + Text-based Memory & 1.50 & 2.12 \\
+% + CoMEM & 1.58 & 2.13 \\
+% \bottomrule
+% \end{tabular}
+% %}
+% \label{tab:efficiency}
+% \vspace{-1em}
+% \end{wraptable}
+
+\begin{wraptable}[11]{r}{0.6\textwidth}
+\vspace{-1em}
+\centering
+\caption{Inference speed and performance comparison across different methods. We report the average inference time (in minutes) per trajectory and accuracy (Acc.) in two domains.}
+\vspace{-0.5em}
+\small
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{\textbf{Wikipedia}} & \multicolumn{2}{c}{\textbf{Shopping}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5}
+\textbf{Method} & \textbf{Time} & \textbf{Acc.} & \textbf{Time} & \textbf{Acc.} \\
+\midrule
+Qwen2.5-VL & 2.33 & 72.4 & 1.57 & 68.9 \\
++ Text-based Memory & 1.50 & 77.1 & 2.12 & 73.5 \\
++ CoMEM & 1.58 & \textbf{81.3} & 2.13 & \textbf{76.8} \\
+\bottomrule
+\end{tabular}
+\label{tab:efficiency}
+\vspace{-1em}
+\end{wraptable}
+
+To assess the impact of memory augmentation on agent efficiency, we measure the average time consumption per trajectory across two tasks in MMInA~\citep{zhang2024mmina}: \textit{Wikipedia} browsing and \textit{Shopping}, as shown in Table~\ref{tab:efficiency}. Importantly, our method does not introduce additional time latency during inference. In fact, for the Wikipedia task, both memory-augmented variants, Text-based Memory and CoMEM, demonstrate even shorter completion times compared to the baseline. This suggests that access to prior experience allows the agent to make more informed decisions and follow more efficient trajectories. 
+
+Although the task completion time for the Shopping task is slightly higher with memory integration, the difference is marginal (within 0.5 minutes) and does not indicate any substantial overhead. Overall, the results confirm that our memory mechanism maintains time efficiency while providing the added benefit of improved task performance and generalization.
+
+\paragraph{Training Efficiency}
+
+\begin{wraptable}{r}{0.45\textwidth}
+\vspace{-1.2em}
+\centering
+\caption{Task success rate comparison of using different training data scale.}
+\vspace{-0.3em}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Data Size} & \textbf{Wikipedia} & \textbf{Shopping} \\
+\midrule
+500  & 39.30\% & 33.30\% \\
+1000 & 43.83\% & 39.00\% \\
+1500& \textbf{47.40\%} & \textbf{45.00\%} \\
+2000 & 45.00\% & 42.60\% \\
+\bottomrule
+\end{tabular}
+\label{tab:training-efficiency}
+\vspace{-1em}
+\end{wraptable}
+
+To evaluate the efficiency of our training process, we conduct experiments using varying amounts of high-quality training trajectories for aligning the compressed memory embeddings with the VLM's representation space. As shown in Table~\ref{tab:training-efficiency}, our method achieves strong performance with limited training data. Notably, with only 1500 high-quality trajectories, the model reaches peak performance on both the Wikipedia (47.40\%) and Shopping (45.00\%) tasks. This indicates that our memory encoder can effectively distill and align semantic knowledge into a compact embedding space with minimal data. Interestingly, increasing the training data to 2000 trajectories does not yield further gains, suggesting that our model is already well-aligned and sample-efficient. These results highlight the practicality of our approach in real-world scenarios where labeled trajectories are expensive or scarce.
+
+
+
+
+
+\section{Conclusion}
+We presented a memory-augmented framework for GUI agents that tackles long-horizon generalization by encoding prior trajectories as compact continuous embeddings and scaling this memory through an autonomous data flywheel. 
+The proposed memory greatly compresses multimodal trajectories while preserving critical visual cues, enabling practical retrieval augmentation at inference without ballooning context length. 
+We empirically verified that the performance improves monotonically as we scale memory size and retrieval depth. 
+To sustain growth, we devised an auto-scaling data flywheel to collect diverse and high-quality experiences, consisting of environment discovery, task synthesis, trajectory rollout, and quality checking.
+Using only a search engine, an open-source VLM, and an agent, our data flywheel yielded more than 100k trajectories at low cost (\$4k). 
+Based on the collected memory data, we adopted a lightweight adaptation regime (LoRA + Q-Former; 1.2\% parameters on 1.5k samples) to equip a 7B open model with our memory.
+Experimental results have shown that the memory-augmented 7B model can attain accuracy competitive with leading closed-source systems.
+%while maintaining favorable inference cost, especially under layout shifts and long-horizon settings. 
+
+Overall, our results indicate that continuous memory and autonomous experience acquisition form a robust foundation for scalable, generalizable GUI agents.
+Future work includes adaptive retrieval policies conditioned on uncertainty, tighter integration with RL for credit assignment over memories, extension to mobile and desktop automation at scale, and privacy-aware on-device memorization. 
+
+\section*{Limitation and Ethics Statement}
+\label{sec:ethics}
+This work outlines a practical path to scaling GUI agents by shifting knowledge from long token histories to compact, learnable embeddings and fueling them with autonomously harvested trajectories, but several technical limits remain. Retrieval can drift under extreme UI shifts (novel layouts, widgets, interaction patterns), and screenshot-only inputs underrepresent non-visual states; expanding retrieval to execution traces or UI graphs may help. At memory scale, freshness, deduplication, and provenance are hard to govern, and larger banks stress latency and GPU memory; age-/domain-aware eviction, clustering-based dedup, hierarchical or sharded FAISS indexes, and on-device caches are natural next steps. Finally, benchmark coverage lags real-world non-stationarity and evolving websites, complicating exact reproducibility; releasing crawl seeds, environment allowlists, and versioned testbeds can improve transparency.
+
+Our data flywheel—environment discovery, task synthesis, rollout, and judging—also introduces reliability and bias risks. VLM judges can admit failures or reject valid successes, and self-reinforcing loops may overfit popular layouts or “easy” sites; ensemble judging, disagreement sampling with targeted spot checks, and domain-balanced crawling/retrieval mitigate this. The pipeline is vulnerable to data poisoning (malicious pages, adversarial screenshots) and prompt-injection-style UI content; source filtering, allowlists, per-memory safety scans, and retrieval-time trust scoring are required. Because auto-collected pages may embed copyrighted assets or restrictive licenses, public releases should prioritize features/embeddings plus URLs and honor site-specific terms.
+
+Ethical considerations center on safety, privacy, and environmental cost. Autonomous rollouts must never operate on real accounts or payment flows; sandboxing, dry-run modes, click whitelists, ToS/robots checks, and fail-safes are mandatory. Screenshots can contain PII or sensitive content; apply consented collection only, automated redaction, minimization, strict access controls, and documented retention/erasure policies. Although our training is lightweight, large-scale crawl/embedding/indexing consumes energy; tracking usage, using efficient encoders, and sharing public indexes can reduce footprint. Addressing these limitations—alongside the modeling advances—is essential for safe, privacy-preserving, and reproducible deployment of memory-augmented GUI agents.
+
+\section*{Reproducibility Statement}
+To ensure the reproducibility of our work, we have uploaded our complete source code as a zip file in the supplementary materials. We will also open-source both the codebase and the generated dataset. Detailed descriptions of our model architecture, training procedures, and hyperparameters are provided in Section \ref{sec:memory design} of the main paper. Implementation details, including environment setup and dataset details are further elaborated in Section \ref{sec:env setup}. The dataset construction pipeline and format are explained in Section \ref{sec:memory flywheel} and Appendix \ref{sec:task generation pipeline}.
+
+\bibliography{iclr2026_conference}
+\bibliographystyle{iclr2026_conference}
+
+\newpage
+\appendix
+%\section{Appendix}
+\label{appendix}
+
+\section{Case Study}
+\subsection{Shopping Scenario}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{iclr_starter/figs/agent_case_study.drawio.png}
+\caption{Successful case 1 by Qwen2.5-VL-7B + CoMEM in shopping scenario. The model accurately understands the goal, retrieves relevant memory, and selects the correct product.}
+    \label{fig:succes_1}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{iclr_starter/figs/agent_basemodel_1.drawio.png}
+\caption{Failure case of the base model Qwen2.5-VL-7B without memory.
+The model selects an incorrect product that exceeds the price limit, highlighting the importance of contextual memory.}
+    \label{fig:fail_1}
+\end{figure}
+
+In the task “Find a beginner's acrylic paint set on Amazon, with at least 24 colors, suitable for canvas painting, and priced under \$40,” the base model exhibits limited reasoning and planning capabilities as shown in figure \ref{fig:fail_1}. It prematurely selects the first product shown, failing to rigorously evaluate whether the item meets all specified constraints such as price, color count, and suitability for canvas painting. This behavior suggests a lack of contextual understanding and strategic planning. In contrast, the CoMEM-enhanced model demonstrates significantly improved performance by leveraging compressed memory representations from multiple prior shopping trajectories, as shown in figure \ref{fig:succes_1}. These compact embeddings provide rich context, guiding the model to follow a more deliberate and accurate plan—searching, analyzing multiple candidate products, and validating them against all task constraints before making a final selection. This example highlights how CoMEM enables deeper reasoning and constraint-aware decision-making, leading to more reliable outcomes in complex multi-step tasks.
+
+\subsection{Information Scenario}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{iclr_starter/figs/case_comem2.drawio.png}
+\caption{Successful case 2 by Qwen2.5-VL-7B + CoMEM in information scenario. The model accurately understands the goal, retrieves relevant memory, and finds the answer.}
+    \label{fig:success_2}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{iclr_starter/figs/agent_basemodel2.drawio.png}
+\caption{Failure case of the base model Qwen2.5-VL-7B without memory. The model starts with a too general query and lacks enough exploration.}
+    \label{fig:fail_2}
+\end{figure}
+
+In the task “Does the city center of Shanghai have a TV tower with several spheres?”, the base model demonstrates inefficient behavior by issuing an overly general query ("Shanghai") and repeatedly scrolling through irrelevant sections of the Wikipedia article. As shown in figure \ref{fig:fail_2}, this lack of targeted exploration causes the model to miss the visual and textual cues needed to answer the question, ultimately resulting in failure. In contrast, in figure \ref{fig:success_2} the CoMEM-enhanced model begins with a more precise search query (“Shanghai TV tower”) informed by prior experience. It quickly identifies the Oriental Pearl Tower—whose structure features multiple spheres—and successfully verifies its location using both textual and visual evidence. This comparison highlights how CoMEM enables more focused planning and efficient information retrieval, especially in tasks requiring multimodal reasoning.
+
+
+
+\section{Task Generation Pipeline}
+\label{sec:task generation pipeline}
+
+From $\mathcal{Q}_0$, the seed dataset, task descriptions are sampled from each category, of which there are 13 ('education', 'tech', 'entertainment', 'travel', 'health', 'news', 'services','shopping','social', 'food', 'academic', 'government', 'finance').
+
+Each task is used as a search query in DuckDuckGo using SerpAPI, after which the top 20 search results are collected and added to the dictionary of URLs, under the category that the search query was sampled from, resulting in 6,676 unique page links.
+
+As the first part of the task generation process, each link is processed to truncate them down to the parent domain and first path level. The link is opened with Playwright and a screenshot is taken. The link and screenshot are passed to the VLM with the following prompt to extract the page content and check if the page is inaccessible.
+
+\begin{fancybox} {Page Content Extraction Prompt}
+You are an expert web page analyzer. Analyze the given website and screenshot and extract all useful information in detail. If the page is blocked (e.g. 403, 404, has captcha, etc.), directly return 'blocked'. Otherwise, return a detailed description of the page content.
+\end{fancybox}
+
+The extracted page content then forms part of the prompt to the VLM to extract detailed information on the page tailored specifically for the task generation LLM's use. At this stage, if a page is blocked, we skip it.
+
+\begin{fancybox}{Page Information Extraction Prompt}
+You are an expert web page analyzer. Analyze the given website and screenshot and extract all useful information for task generation.
+\bigskip
+
+URL: \{url\}
+
+Category: \{category\}
+
+Page Content: \{page\_content\}
+
+\bigskip
+Based on the URL, category, and page content above, provide a comprehensive summary of:
+
+1. Website type and purpose - its primary intended use cases, problems that can be solved on this site
+
+2. Navigation structure and key sections
+
+3. Interactive elements (buttons, forms, links, etc.)
+
+4. Content types present (articles, product listings, archives, etc.)
+
+5. Anything unusual or unique to this site
+
+6. IGNORE any cookie notices, privacy popups, log in buttons, site errors, ads, or other elements not specific to the site's function.
+
+\bigskip
+Focus on information that would be useful for generating problems for web automation to solve. Think about what human users might want to achieve on this website.
+
+Provide a clear, structured summary that captures these essential aspects of the website for task generation purposes.
+\end{fancybox}
+
+The resulting detailed page description forms \{info\_summary\}, part of the task generation prompt. Each prompt also contains \{examples\_section\}, a random selection of 5 example tasks from $\mathcal{Q}_0$, the seed dataset. Examples are pulled from the same task category that the current page belongs to.       
+
+\begin{fancybox}{Initial Task Generation Prompt}
+You are an expert generator of task problems for web automation. Based on the website analysis and screenshot, generate 10 diverse task problems that a web agent could solve on this website.
+
+\bigskip
+URL: \{url\}
+
+Category: \{category\}
+
+\bigskip
+IMPORTANT: Generate direct, actionable problems with a solution. Task problems should be specific and achievable.
+
+\bigskip
+Generate exactly 10 diverse, direct instruction task problems that:
+
+1. Have a clear, specific objective; a problem to solve
+
+2. Are achievable within the website's scope
+
+3. Test diverse skills like navigation, information gathering, information synthesis in order to solve problems
+
+4. Require multiple steps to solve, not a single action
+
+5. Have measurable, verifiable success criteria; avoid vague, unverifiable tasks like 'Read a paragraph' or 'Explore a page'. Instead, focus on a clear, deliberate end goal.
+
+6. IMPORTANT: Do NOT write tasks that contain overly specific instructions like 'Click on X...' or 'Type X...'. These are not problems to be solved. The task problem should not direct the agent on what to do, but rather what to achieve.
+
+7. Are distinct, not related to each other, and do not require knowledge or completion of previous task problems.
+
+\bigskip
+For each task problem, provide:
+
+- Task problem description (direct instruction with specific requirements)
+
+- Expected outcome (what should be accomplished, what condition needs to be checked to indicate success)
+
+- Difficulty level (easy/medium/hard)
+
+\bigskip
+
+\{examples\_section\}
+
+\bigskip
+Format your response as exactly 10 tasks, one per line, with this structure:
+
+1. [Task Description] \textbar{} [Expected Outcome] \textbar{} [Difficulty]
+
+2. [Task Description] \textbar{} [Expected Outcome] \textbar{} [Difficulty]
+
+3. [Task Description] \textbar{} [Expected Outcome] \textbar{} [Difficulty]
+
+\bigskip
+Example format:
+
+1. Find a news article about climate change published in the last week \textbar{} Should locate and display a recent climate change article \textbar{} Easy
+
+2. Search for iPhone 12 Pro with price below \$800 \textbar{} Should have navigated to a page for iPhone 12 Pro models under \$800 \textbar{} Medium
+
+3. Book a hotel in New York for 2 people for next weekend \textbar{} Should find and select a specific hotel for 2 people \textbar{} Medium
+
+4. Find the top 3 customer reviews for Nike running shoes \textbar{} Should locate and display a page showing the top 3 reviews \textbar{} Easy
+
+5. Compare prices of Samsung Galaxy phones between \$500-700 \textbar{} Should find a page comparing multiple Samsung phones in that price range \textbar{} Medium
+
+6. Find the paper with the most citations under the Computer Science category \textbar{} Should identify and display the page of an AI paper \textbar{} Hard
+
+\bigskip
+Respond only with the 10 tasks in the specified format, no additional text.
+
+\bigskip
+Website Analysis: \{info\_summary\}
+\end{fancybox}
+
+The tasks generated by the LLM in this first pass contain some poor-quality tasks that are overly specific and not similar to tasks undertaken by human users.
+
+To refine these tasks, each generated task is passed to the LLM again with a prompt to rewrite the task if necessary. The prompt is based on the one used in ZeroGUI's \citep{ZeroGUI} new task generation pipeline.
+
+
+\begin{fancybox}{Task Refinement Prompt}
+You will be given a task instruction. Please refine it with the following requirements:
+\bigskip
+
+1. Imitate the speech style of a human user. Make it more natural and diverse.
+
+2. Remove specific hints on how to achieve the task. (e.g. press which button, click which link, etc.)
+
+3. The task should remain unambiguous and clear, and the task's goal must remain the same.
+\bigskip
+
+For example, you should refine:
+
+"Use the "Price range" filter on the Ryanair website to limit the flight options to \$50-100."
+
+into:
+
+"Find flights from London to Paris with a price range of \$50-100."
+
+or
+
+"I only have a limited budget for flights. Could you help find flights from London to Paris with a price range of \$50-100."
+\bigskip
+
+You should refine:
+
+"Import email messages from another email program by clicking the "Import" button under the "Import from Another Program" section."
+
+into:
+
+"Please import email messages from another email program."
+
+or
+
+"I have some emails in my other email program. Could you help me import them into Thunderbird?"
+\bigskip
+
+You should refine:
+
+"Click on the "About Us" link to learn more about the company's history and mission."
+
+into:
+
+"Please provide information about the company's history and mission."
+
+or
+
+"Find an "About Us' or similar page on the website that describes the company's history and mission."
+\bigskip
+
+The original instruction is:
+
+\{instruction\}
+
+Refine it and return the refined instruction text in this exact format:
+\bigskip
+
+ORIGINAL: [the original instruction]
+
+REFINED: [the refined instruction]
+\end{fancybox}
+
+\vspace{1cm}
+
+% \section{Task Generation Outcome}
+% \label{sec:task_generation_detail}
+
+
+\section*{The Use of Large Language Models}
+We employed large language models in two limited capacities: first, to polish drafts for grammar, clarity, and flow without changing the scientific content; second, to provide lightweight debugging assistance. All algorithmic designs, experiments, analyses, and claims originate from the authors.
+
+\end{document}

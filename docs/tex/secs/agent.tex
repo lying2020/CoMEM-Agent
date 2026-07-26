@@ -1,7 +1,0 @@
-Standard agent interaction is a \emph{Partially Observable Markov Decision Process} (POMDP), where each process starts from an initial observation $o_1$ that usually contains a problem statement, and then a multi-turn interaction history of length $T$ is generated as
-\begin{equation*}
-    \tau = (o_1,a_1,o_2,a_2,\ldots,o_T)
-\end{equation*}
-where $a_i$ usually contains a reasoning block and a tool call, and $o_i$ usually represents an observation returned from the environment.
-% Different from a vanilla MDP process, the LLM agent has to carry the entire interaction history as input at each step, which results in a linearly scaling context length through the interaction.
-The standard Large Language Model (LLM) agent takes the entire interaction history $\tau$ as input at each step to infer the internal belief state of the environment, and generates the next action $a_i$. This results in a linearly scaling context length during the interaction that pressures the model's inference efficiency and performance.

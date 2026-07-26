@@ -1,9 +1,0 @@
-We choose \texttt{Qwen3-4B} as our smaller memory model because of its scale and long-context capability.
-We always use the maximum summary length of $2048$ for consistency.
-We pair the memory model with agent models with various sizes and capabilities.
-Specifically, we choose \texttt{DeepSWE}, \texttt{Qwen3-Coder-Max} and \texttt{GLM-4.7}.
-We compare with the following baselines: \textbf{Full-Context} is the standard agentic inference scenario with long-context inference. \textbf{No Summary} removes the summaries from the agent model prompt and leave the other components intact. \textbf{Qwen3-4B (base)} uses off-the-shelf model as memory model. Finally, $\textbf{GRPO}_{AC}$ is a model trained using our proposed framework in Section~\ref{sec:train}.
-For \texttt{DeepSWE} and \texttt{Qwen3-Coder-Max}, we use $k=2$, and for \texttt{GLM-4.7} we use $k=4$.
-For latency comparison, we start two different vLLM engines for both agent model and memory model. We consistently choose vLLM version \texttt{0.14.0} with prefix caching and chunked prefilling. We further compare latency under two scenarios: with or without CPU offloading, to demonstrate the capability of \model on wide deployment settings.
-For \texttt{DeepSWE}, we run on A100 (80GB), and for the other two models, we run on H200.
-Notice that in production, one memory model server can be used for multiple agent models. See further discussions in Section~\ref{sec:discuss}. Detailed hyperparameters for both training and evaluation are provided in Appendix~\ref{app:hyperparameters}.
