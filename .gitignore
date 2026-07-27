@@ -160,6 +160,8 @@ logs/
 *.txt
 data/
 datasets/
+dataset/
+.venv_dl/
 
 # Screenshots and images (if any)
 *.png
